@@ -1,0 +1,6 @@
+import pandas as pd
+
+df = pd.read_excel('사고분석-지역별22.xlsx')
+df['사고유형'].unique()
+df['사고유형'].value_counts()
+df[df['사고유형']== '차대사람 - 횡단중']
