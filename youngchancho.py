@@ -147,42 +147,139 @@ plt.show()
 
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+import pandas as pd
+import numpy as np
+
+# 한글 폰트(Windows 기준) & 마이너스 기호 설정
+rcParams['font.family'] = 'Malgun Gothic'
+rcParams['axes.unicode_minus'] = False
+
+# 1) 전체 데이터에서 결측치 제거
+df_all = df1.dropna().copy()
+
+# 2) '교차로' 포함 행만 필터 + 결측치 제거
+df_cross = df1[df1['도로형태'].str.contains('교차로', na=False)].dropna().copy()
+
+# 3) 법규위반별 비율(%) 계산
+all_ratio = (df_all['법규위반'].value_counts(normalize=True) * 100)
+cross_ratio = (df_cross['법규위반'].value_counts(normalize=True) * 100)
+
+# 4) 항목 통일(전체와 교차로의 카테고리 합집합으로 정렬)
+cats = list(all_ratio.sort_values(ascending=False).index)  # 전체 비중 기준으로 정렬
+for k in cross_ratio.index:
+    if k not in cats:
+        cats.append(k)
+
+all_ratio = all_ratio.reindex(cats).fillna(0)
+cross_ratio = cross_ratio.reindex(cats).fillna(0)
+
+# 5) 그룹 막대그래프 그리기
+x = np.arange(len(cats))
+width = 0.38
+
+fig, ax = plt.subplots(figsize=(12, 6))
+bars1 = ax.bar(x - width/2, all_ratio.values, width, label='전체', alpha=0.9)
+bars2 = ax.bar(x + width/2, cross_ratio.values, width, label='교차로', alpha=0.9)
+
+ax.set_title("법규위반별 비율(%) — 결측치 제외: 전체 vs 교차로")
+ax.set_xlabel("법규위반")
+ax.set_ylabel("비율(%)")
+ax.set_xticks(x, cats, rotation=45, ha='right')
+ax.set_ylim(0, max(all_ratio.max(), cross_ratio.max()) * 1.15)  # 여유 공간
+ax.legend()
+
+# 6) 막대 위 퍼센트 라벨 표시
+def add_labels(bars):
+    for b in bars:
+        h = b.get_height()
+        ax.annotate(f"{h:.1f}%",
+                    (b.get_x() + b.get_width()/2, h),
+                    ha='center', va='bottom', fontsize=9, rotation=0)
+
+add_labels(bars1)
+add_labels(bars2)
+
+plt.tight_layout()
+plt.show()
+
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
 
 # 한글 폰트 설정 (Windows 기준)
 rcParams['font.family'] = 'Malgun Gothic'
 rcParams['axes.unicode_minus'] = False
 
-# 1) 결측치 제거
-df_clean = df1.dropna(subset=["도로형태", "사고유형"]).copy()
+# 1) '교차로' 포함 데이터 필터링
+df_cross = df1[df1['도로형태'].str.contains('교차로', na=False)].copy()
 
-# 2) 도로형태 분류
-def map_category(x: str) -> str:
-    if "교차로" in x:
-        return "교차로"
-    elif "단일로" in x:
-        return "단일로"
-    else:
-        return "기타"
+# 2) 합계 집계
+injury_sums = df_cross[['사망자수', '중상자수', '경상자수']].sum()
 
-df_clean["도로분류"] = df_clean["도로형태"].apply(map_category)
+# 3) 시각화
+plt.figure(figsize=(6, 5))
+bars = plt.bar(injury_sums.index, injury_sums.values, color=['#FF6666', '#FFCC66', '#66B2FF'])
 
-# 3) 조건별 건수 계산
-교차로_차대차 = df_clean[(df_clean["도로분류"] == "교차로") &
-                      (df_clean["사고유형"].str.contains("차대차", na=False))].shape[0]
+plt.title("교차로 사고 피해 정도 합계")
+plt.xlabel("피해 정도")
+plt.ylabel("인원 수")
 
-교차로_기타 = df_clean[(df_clean["도로분류"] == "교차로") &
-                    (~df_clean["사고유형"].str.contains("차대차", na=False))].shape[0]
+# 막대 위 라벨 표시
+for bar in bars:
+    height = bar.get_height()
+    plt.annotate(f"{int(height)}",
+                 xy=(bar.get_x() + bar.get_width()/2, height),
+                 ha='center', va='bottom', fontsize=10)
 
-차대차_기타 = df_clean[(df_clean["도로분류"] != "교차로") &
-                    (df_clean["사고유형"].str.contains("차대차", na=False))].shape[0]
+plt.tight_layout()
+plt.show()
 
-# 4) 데이터 구성
-labels = ["교차로 차대차", "교차로 기타", "차대차 - 기타"]
-sizes = [교차로_차대차, 교차로_기타, 차대차_기타]
-colors = ["#FF6666", "#FFCCCC", "#66B2FF"]
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
 
-# 5) 파이차트 시각화
-plt.figure(figsize=(7, 7))
+# 한글 폰트 설정
+rcParams['font.family'] = 'Malgun Gothic'
+rcParams['axes.unicode_minus'] = False
+
+# 1) 주야, 사망자수 결측치 제거
+df_clean = df1.dropna(subset=["주야", "사망자수"]).copy()
+
+# 2) '야간' 데이터만 필터링
+df_night = df_clean[df_clean["주야"] == "야간"]
+
+# 3) 사망자수 1 이상 vs 0
+count_death = (df_night["사망자수"] >= 1).sum()
+count_no_death = (df_night["사망자수"] == 0).sum()
+
+# 4) 파이차트 시각화
+labels = ["사망자수 1 이상", "사망자수 0"]
+sizes = [count_death, count_no_death]
+colors = ["#FF6666", "#99CCFF"]
+
+plt.figure(figsize=(6, 6))
 plt.pie(sizes, labels=labels, autopct="%.1f%%", startangle=90, colors=colors)
-plt.title("교차로·기타 구간의 차대차/기타 사고 비율")
+plt.title("야간 사고 중 사망자수 1 이상 비율")
+plt.show()
+
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+# 한글 폰트 설정
+rcParams['font.family'] = 'Malgun Gothic'
+rcParams['axes.unicode_minus'] = False
+
+# 1) 주야, 사망자수 결측치 제거
+df_clean = df1.dropna(subset=["주야", "사망자수"]).copy()
+
+# 2) 사망자수 조건에 따라 건수 계산
+count_death = (df_clean["사망자수"] >= 1).sum()
+count_no_death = (df_clean["사망자수"] == 0).sum()
+
+# 3) 파이차트 시각화
+labels = ["사망자수 1 이상", "사망자수 0"]
+sizes = [count_death, count_no_death]
+colors = ["#FF6666", "#99CCFF"]
+
+plt.figure(figsize=(6, 6))
+plt.pie(sizes, labels=labels, autopct="%.1f%%", startangle=90, colors=colors)
+plt.title("전체 사고 중 사망자수 1 이상 비율")
 plt.show()
